@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block content %}
+<head>
+    <link rel="stylesheet" href="static/calorie.css">
+    <meta name="viewport" content="width=device-width, initial-scale=0.5, user-scalable=no">
+</head>
+<body>
+    <h1>Welcome, {{ user.username }}</h1>
+    <section class="summary">
+        <div class="summary-item">
+            <p>Daily Calorie Needs: <span>{{ daily_calorie_needs }}</span></p>
+        </div>
+        <div class="summary-item">
+            <p>Total Calories Consumed Today: <span>{{ total_calories }}</span></p>
+        </div>
+        <div class="summary-item">
+            <p>Calories Left for Today: <span>{{ calories_left }}</span></p>
+        </div>
+    </section>
+    <section class="form-section">
+        <form method="post" action="{{ url_for('calorie') }}">
+            <label for="calories">Add Calories:</label>
+            <input type="number" id="calories" name="calories" required>
+            <label for="description">Description:</label>
+            <input type="text" id="description" name="description">
+            <button type="submit">Add</button>
+        </form>
+    </section>
+    <section class="entries">
+        <h2>Today's Calorie Entries</h2>
+        <ul>
+            {% for calorie in user_calories %}
+            <li>{{ calorie.calories }} kcal - {{ calorie.description }}</li>
+            {% endfor %}
+        </ul>
+    </section>
+</body>
+{% endblock %}

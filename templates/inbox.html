@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block content %}
+<head>
+    <link rel="stylesheet" href="{{ url_for('static', filename='inbox.css') }}">
+    <meta name="viewport" content="width=device-width, initial-scale=0.5, user-scalable=no">
+</head>
+<body>
+    <h2>Your Inbox</h2>
+    <div class="message-list">
+        {% if messages %}
+            {% for message in messages %}
+                <div class="message">
+                    <div class="message-header">{{ message.sender }}</div>
+                    <div class="message-info">
+                        <p> {{ message.message }}</p>
+                    </div>
+                    <div class="timestamp">
+                        <p> {{ message.timestamp | time_since }}</p>
+                    </div>
+                </div>
+                {% if not loop.last %}
+                    <hr class="message-separator">
+                {% endif %}
+            {% endfor %}
+        {% else %}
+            <p>No messages to display.</p>
+        {% endif %}
+    </div>
+</body>
+{% endblock %}

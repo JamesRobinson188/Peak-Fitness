@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block content %}
+<head>
+    <link rel="stylesheet" href="static/climb.css">
+    <meta name="viewport" content="width=device-width, initial-scale=0.5, user-scalable=no">
+</head>
+<body>
+    <h1>Log Your Climb</h1>
+    <form class="container" action="{{ url_for('climb') }}" method="post">
+        <label for="climb-name">Climb Name:</label>
+        <input type="text" id="climb-name" name="climb_name" required>
+
+        <label for="grade">Grade:</label>
+        <select name="grade" id="grade" required>
+            <option value="">Select Grade</option>
+            <optgroup label="Bouldering Grades">
+                <option value="V0">V0</option>
+                <option value="V1">V1</option>
+                <option value="V2">V2</option>
+                <option value="V3">V3</option>
+                <option value="V4">V4</option>
+                <option value="V5">V5</option>
+                <option value="V6">V6</option>
+                <option value="V7">V7</option>
+                <option value="V8">V8</option>
+                <option value="V9">V9</option>
+                <option value="V10">V10</option>
+                <option value="V11">V11</option>
+                <option value="V12">V12</option>
+                <option value="V13">V13</option>
+                <option value="V14">V14</option>
+                <option value="V15">V15</option>
+                <option value="V16">V16</option>
+                <option value="V17">V17</option>
+            </optgroup>
+            <optgroup label="Climbing Grades">
+                <option value="4+">4+</option>
+                <option value="5">5</option>
+                <option value="5+">5+</option>
+                <option value="6a">6a</option>
+                <option value="6a+">6a+</option>
+                <option value="6b">6b</option>
+                <option value="6b+">6b+</option>
+                <option value="6c">6c</option>
+                <option value="6c+">6c+</option>
+                <option value="7a">7a</option>
+                <option value="7a+">7a+</option>
+                <option value="7b">7b</option>
+                <option value="7b+">7b+</option>
+                <option value="7c">7c</option>
+                <option value="7c+">7c+</option>
+                <option value="8a">8a</option>
+                <option value="8a+">8a+</option>
+                <option value="8b">8b</option>
+                <option value="8b+">8b+</option>
+                <option value="8c">8c</option>
+                <option value="8c+">8c+</option>
+                <option value="9a">9a</option>
+                <option value="9a+">9a+</option>
+                <option value="9b">9b</option>
+                <option value="9b+">9b+</option>
+                <option value="9c">9c</option>
+            </optgroup>
+        </select>
+        <label for="extra-points">Lead Climb</label>
+        <input type="checkbox" id="extra-points" name="extra_points">
+        <button type="submit" class="normal">Log Climb</button>
+    </form>
+    <h2>Your Logged Climbs</h2>
+    <ul>
+        {% for climb in climbs %}
+        <li>
+            {{ climb.name }} - {{ climb.grade }}
+            <form action="{{ url_for('delete_climb', climb_id=climb.id) }}" method="post">
+                <button type="submit" class="delete-button">Remove</button>
+            </form>            
+        </li>
+        {% else %}
+        <li>No climbs logged yet.</li>
+        {% endfor %}
+    </ul>
+
+</body>
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const listItems = document.querySelectorAll('li');
+        listItems.forEach((item, index) => {
+            item.style.animationDelay = `${0.2 * index}s`;
+        });
+    });
+</script>
+
+{% endblock %}

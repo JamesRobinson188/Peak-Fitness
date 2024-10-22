@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block content %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Calorie Data</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <h1>Calorie Intake Over Time</h1>
+    <canvas id="calorieChart"></canvas>
+    <script>
+        const ctx = document.getElementById('calorieChart').getContext('2d');
+        const calorieData = {{ calories|tojson }};
+        const labels = calorieData.map(data => data.day);
+        const dataPoints = calorieData.map(data => data.calories);
+
+        const chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Calories Consumed',
+                    data: dataPoints,
+                    borderColor: 'rgb(75, 192, 192)',
+                    tension: 0.1
+                }]
+            },
+            options: {
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>
+
+{% endblock %}

@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block content %}
+<head>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <link rel="stylesheet" href="static/social.css">
+    <meta name="viewport" content="width=device-width, initial-scale=0.5, user-scalable=no">
+</head>
+<body>
+    <h1>Search for your friends!</h1>
+    <input type="text" id="search_query" placeholder="Search for a user" onkeyup="searchUsers()">
+    <div id="search_results"></div>
+    <div class="overlayy" id="overlayy" onclick="closeModal()"></div>
+    <div class="modal" id="modal">
+        <span class="close-modal" onclick="closeModal()">&times;</span>
+        <div id="modal-content"></div>
+    </div>
+
+    <script>
+        var response = [];
+
+        function searchUsers() {
+            var query = $('#search_query').val();
+            $.ajax({
+                url: '/search_users',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ search_query: query }),
+                success: function(resp) {
+                    response = resp;
+                    var html = '';
+                    for (var i = 0; i < response.length; i++) {
+                        html += '<div class="username" onclick="showModal(' + i + ')">' + response[i].username + '</div>';
+                    }
+                    $('#search_results').html(html).css('opacity', '1');
+                }
+            });
+        }
+
+        function showModal(index) {
+            var user = response[index];
+            var html = '<ul class="user-info">' +
+                        '<li>Pullups: ' + user.pullups + '</li>' +
+                        '<li>Pushups: ' + user.pushups + '</li>' +
+                        '<li>Total: ' + user.total + '</li>' +
+                        '<li>Awards: ' + user.awards + '</li>';
+
+            if (user.exercises && user.exercises.length > 0) {
+                for (var i = 0; i < user.exercises.length; i++) {
+                    html += '<li>' + user.exercises[i].name + ': ' + user.exercises[i].count + '</li>';
+                }
+            }
+
+            if (user.climbs && user.climbs.length > 0) {
+                html += '';
+                for (var j = 0; j < user.climbs.length; j++) {
+                    html += '<li>' + user.climbs[j].name + ' - Grade: ' + user.climbs[j].grade + '</li>';
+                }
+            }
+
+            html += '</ul>';
+            $('#modal-content').html(html).fadeIn();
+            $('#overlayy').fadeIn();
+            $('#modal').fadeIn();
+        }
+
+        function closeModal() {
+            $('#overlayy').fadeOut();
+            $('#modal').fadeOut();
+        }
+
+    </script>
+</body>
+</html>
+
+{% endblock %}

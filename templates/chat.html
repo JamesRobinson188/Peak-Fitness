@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Chat</h1>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=0.5, maximum-scale=0.5, user-scalable=no">
+
+    <link rel="stylesheet" href="static/chat.css">
+</head>
+
+<ul id="messages">
+    {% for message in messages %}
+      <li>{{ message.user.username }}: {{ message.message }}</li>
+    {% endfor %}
+  </ul>
+
+  <form id="chatForm" method="post">
+    <input type="text" name="message" id="messageInput" placeholder="Type your message">
+    <input type="submit" value="Send">
+</form>
+
+<script>
+  document.getElementById('chatForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      const messageInput = document.getElementById('messageInput');
+      const message = messageInput.value;
+
+      fetch('/chat', {
+          method: 'POST',
+          headers: {
+              'Content-Type': 'application/json',
+              'X-Requested-With': 'XMLHttpRequest'
+          },
+          body: JSON.stringify({ message: message })
+      })
+      .then(response => response.json())
+      .then(data => {
+          if(data.status === 'success') {
+              fetchMessages();
+          } else {
+              console.error('Error:', data.message);
+          }
+      })
+      .catch(error => console.error('Error:', error))
+          .finally(() => {
+        messageInput.value = '';
+    });
+  });
+
+  function fetchMessages() {
+    const messagesElement = document.getElementById('messages');
+    const scrollOffset = 5;
+    const isNearBottom = messagesElement.scrollTop + messagesElement.clientHeight >= messagesElement.scrollHeight - scrollOffset;
+
+    fetch('/get_messages')
+        .then(response => response.json())
+        .then(data => {
+            let messagesList = '';
+            data.forEach(msg => {
+                messagesList += '<li>' + msg.username + ': ' + msg.message + '</li>';
+            });
+            messagesElement.innerHTML = messagesList;
+
+            if (isNearBottom) {
+                messagesElement.scrollTop = messagesElement.scrollHeight;
+            }
+        })
+        .catch(error => console.error('Error:', error));
+}
+
+
+
+  setInterval(fetchMessages, 2000);
+
+  window.onload = function() {
+    var element = document.getElementById("messages");
+    element.scrollTop = element.scrollHeight;
+}
+
+</script>
+
+
+{% endblock %}
