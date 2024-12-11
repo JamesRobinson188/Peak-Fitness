@@ -2,18 +2,14 @@ from flask import Flask, render_template, request, redirect, url_for, flash, ses
 from flask_sqlalchemy import SQLAlchemy
 import os
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime, date
-import openai
-openai.api_key = 'OPENAI_API_KEY'
+from datetime import datetime
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(app.root_path, 'database/users.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.secret_key = 'gy543gy9gh254uy932gy7543ghu896534jyu86954hgy85473gty754r3ghy785h8uy9y43hu89'
 
-
 db = SQLAlchemy(app)
-
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -24,18 +20,11 @@ class User(db.Model):
     anonymous_mode = db.Column(db.Boolean, default=False)
     awards = db.Column(db.Integer, nullable=False, default=0)
     points = db.Column(db.Integer, nullable=False, default=0)
-    age = db.Column(db.Integer, nullable=True, default=0)
-    height = db.Column(db.Integer, nullable=True, default=0)
-    weight = db.Column(db.Float, nullable=True, default=0)
-    activity_level = db.Column(db.String(30), nullable=True, default="moderately_active")
-    gender = db.Column(db.Boolean, default=True)
-    goal = db.Column(db.Boolean, default=True)
 
-    chats = db.relationship('Chat', backref='user', cascade='all, delete-orphan')
     exercises = db.relationship('Exercise', backref='user', cascade='all, delete-orphan')
     climbs = db.relationship('Climb', backref='user', cascade='all, delete-orphan')
     inbox = db.relationship('Inbox', backref='user', cascade='all, delete-orphan')
-    calories = db.relationship('Calories', backref='user', cascade='all, delete-orphan')
+    exercise_logs = db.relationship('ExerciseLog', backref='user', cascade='all, delete-orphan')
 
     def update_points(self):
         self.points = self.pushups + self.pullups * 2
@@ -43,12 +32,6 @@ class User(db.Model):
             self.points += exercise.count
         for climb in self.climbs:
             self.points += climb.points
-
-
-class Chat(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    message = db.Column(db.String(500), nullable=False)
 
 
 class Exercise(db.Model):
@@ -75,12 +58,16 @@ class Inbox(db.Model):
     timestamp = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
 
-class Calories(db.Model):
+# New model to log exercise changes (pushups, pullups, custom exercises)
+class ExerciseLog(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    calories = db.Column(db.Integer, nullable=False)
-    description = db.Column(db.String(255), nullable=True)
-    day = db.Column(db.Date, nullable=False, default=date.today)
+    exercise_name = db.Column(db.String(100))
+    change = db.Column(db.String(20))     # e.g. "increase", "decrease", "increase10", "decrease10"
+    old_count = db.Column(db.Integer)
+    new_count = db.Column(db.Integer)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
 
 @app.context_processor
 def inject_user_exercises():
@@ -147,7 +134,6 @@ def register():
     return render_template("register.html", error=error)
 
 
-
 @app.route("/logout")
 def logout():
     session.pop("logged_in", None)
@@ -167,6 +153,7 @@ def pushups():
 
     if request.method == 'POST':
         change = request.form.get("change")
+        old_count = user.pushups
 
         if change == "increase":
             user.pushups += 1
@@ -176,6 +163,12 @@ def pushups():
             user.pushups += 10
         elif change == "decrease10" and user.pushups > 9:
             user.pushups -= 10
+
+        new_count = user.pushups
+        # Log the change
+        if old_count != new_count:
+            log_entry = ExerciseLog(user_id=user.id, exercise_name="pushups", change=change, old_count=old_count, new_count=new_count)
+            db.session.add(log_entry)
 
         db.session.commit()
 
@@ -197,6 +190,7 @@ def pullups():
 
     if request.method == 'POST':
         change = request.form.get("change")
+        old_count = user.pullups
 
         if change == "increase":
             user.pullups += 1
@@ -206,6 +200,12 @@ def pullups():
             user.pullups += 10
         elif change == "decrease10" and user.pullups > 9:
             user.pullups -= 10
+
+        new_count = user.pullups
+        # Log the change
+        if old_count != new_count:
+            log_entry = ExerciseLog(user_id=user.id, exercise_name="pullups", change=change, old_count=old_count, new_count=new_count)
+            db.session.add(log_entry)
 
         db.session.commit()
 
@@ -218,12 +218,11 @@ def pullups():
 def api_leaderboard():
     users = User.query.order_by(User.points.desc(), User.username).all()
     user_data = [{'username': (user.username if not user.anonymous_mode else "Anonymous"),
-                  'pullups': user.pullups,
-                  'pushups': user.pushups,
-                  'awards': user.awards,
-                  'points': user.points}
-                  for user in users]
-
+    'pullups': user.pullups,
+    'pushups': user.pushups,
+    'awards': user.awards,
+    'points': user.points}
+    for user in users]
     return jsonify(user_data)
 
 
@@ -231,19 +230,16 @@ def api_leaderboard():
 def update_pushups():
     if not session.get("logged_in"):
         return jsonify({'error': 'Not logged in'}), 401
-
     username = session.get("username")
     user = User.query.filter_by(username=username).first()
-
     if not user:
         return jsonify({'error': 'User not found'}), 404
-
     data = request.get_json()
     change = data.get('change')
-
     if change not in ['increase', 'decrease', 'increase10', 'decrease10']:
         return jsonify({'error': 'Invalid action'}), 400
 
+    old_count = user.pushups
     if change == "increase":
         user.pushups += 1
     elif change == "decrease" and user.pushups > 0:
@@ -253,9 +249,13 @@ def update_pushups():
     elif change == "decrease10" and user.pushups > 9:
         user.pushups -= 10
 
+    new_count = user.pushups
+    if old_count != new_count:
+        log_entry = ExerciseLog(user_id=user.id, exercise_name="pushups", change=change, old_count=old_count, new_count=new_count)
+        db.session.add(log_entry)
+
     user.update_points()
     db.session.commit()
-
     return jsonify({'count': user.pushups})
 
 
@@ -263,19 +263,16 @@ def update_pushups():
 def update_pullups():
     if not session.get("logged_in"):
         return jsonify({'error': 'Not logged in'}), 401
-
     username = session.get("username")
     user = User.query.filter_by(username=username).first()
-
     if not user:
         return jsonify({'error': 'User not found'}), 404
-
     data = request.get_json()
     change = data.get('change')
-
     if change not in ['increase', 'decrease', 'increase10', 'decrease10']:
         return jsonify({'error': 'Invalid action'}), 400
 
+    old_count = user.pullups
     if change == "increase":
         user.pullups += 1
     elif change == "decrease" and user.pullups > 0:
@@ -285,47 +282,14 @@ def update_pullups():
     elif change == "decrease10" and user.pullups > 9:
         user.pullups -= 10
 
+    new_count = user.pullups
+    if old_count != new_count:
+        log_entry = ExerciseLog(user_id=user.id, exercise_name="pullups", change=change, old_count=old_count, new_count=new_count)
+        db.session.add(log_entry)
+
     user.update_points()
     db.session.commit()
-
     return jsonify({'count': user.pullups})
-
-
-@app.route('/chat', methods=['GET', 'POST'])
-def chat():
-    if not session.get("logged_in"):
-        return redirect(url_for("login"))
-
-    if request.method == 'POST' and request.is_json:
-        data = request.get_json()
-        message = data.get("message", "")
-        if message:
-            user = User.query.filter_by(username=session.get("username")).first()
-            if user:
-                new_message = Chat(user_id=user.id, message=message)
-                db.session.add(new_message)
-                db.session.commit()
-
-            total_chats = Chat.query.count()
-            if total_chats > 30:
-                oldest_message = Chat.query.order_by(Chat.id.asc()).first()
-                db.session.delete(oldest_message)
-                db.session.commit()
-
-
-                return jsonify({'status': 'success', 'message': 'Message sent'})
-
-        return jsonify({'status': 'error', 'message': 'Invalid message'})
-
-    messages = Chat.query.join(User).order_by(Chat.id.asc()).all()
-    return render_template('chat.html', messages=messages)
-
-
-@app.route('/get_messages')
-def get_messages():
-    messages = Chat.query.join(User).order_by(Chat.id.asc()).all()
-    messages_data = [{'username': message.user.username, 'message': message.message} for message in messages]
-    return jsonify(messages_data)
 
 
 @app.route('/settings', methods=['GET', 'POST'])
@@ -341,12 +305,6 @@ def settings():
         new_username = request.form.get("new_username")
         new_password = request.form.get("new_password")
         anonymous_mode = request.form.get("anonymous_mode") == 'on'
-        age = request.form.get("age")
-        height = request.form.get("height")
-        weight = request.form.get("weight")
-        gender = request.form.get("gender")
-        activity_level = request.form.get("activity_level")
-        goal = request.form.get("goal")
 
         if new_username and new_username != username:
             existing_user = User.query.filter_by(username=new_username).first()
@@ -361,23 +319,11 @@ def settings():
 
         user.anonymous_mode = anonymous_mode
 
-        if age is not None and age.strip() != '':
-            user.age = age
-        if height is not None and height.strip() != '':
-            user.height = height
-        if weight is not None and weight.strip() != '':
-            user.weight = weight
-        if gender:
-            user.gender = gender == 'male'
-        if activity_level:
-            user.activity_level = activity_level
-        if goal:
-            user.goal = goal == 'bulk' 
-
         if not error:
             db.session.commit()
 
-    return render_template('settings.html', user=user, error=error, current_gender=user.gender, current_activity_level=user.activity_level, current_goal=user.goal)
+    # Removed references to user.gender, user.activity_level, user.goal as they don't exist
+    return render_template('settings.html', user=user, error=error)
 
 
 @app.route('/achievements')
@@ -498,6 +444,7 @@ def update_exercise(exercise_id):
     if change not in ['increase', 'decrease', 'increase10', 'decrease10']:
         return jsonify({'error': 'Invalid action'}), 400
 
+    old_count = exercise.count
     if change == "increase":
         exercise.count += 1
     elif change == "decrease" and exercise.count > 0:
@@ -507,11 +454,16 @@ def update_exercise(exercise_id):
     elif change == "decrease10" and exercise.count > 9:
         exercise.count -= 10
 
+    new_count = exercise.count
     exercise.user.update_points()
+
+    if old_count != new_count:
+        log_entry = ExerciseLog(user_id=exercise.user_id, exercise_name=exercise.name, change=change, old_count=old_count, new_count=new_count)
+        db.session.add(log_entry)
+
     db.session.commit()
 
     return jsonify({'count': exercise.count})
-
 
 
 @app.route('/delete_exercise/<int:exercise_id>', methods=['POST'])
@@ -604,6 +556,7 @@ def delete_climb(climb_id):
     db.session.commit()
     return redirect(url_for("climb"))
 
+
 @app.route('/profile')
 def profile():
     if not session.get("logged_in"):
@@ -652,6 +605,7 @@ def admin_login():
             flash('Incorrect admin password', 'error')
 
     return render_template('admin_login.html')
+
 
 @app.route('/admin', methods=['GET', 'POST'])
 def admin():
@@ -719,8 +673,8 @@ def send_message_to_all_users():
 
     message = request.form.get('message')
     users = User.query.all()
-    for user in users:
-        new_message = Inbox(user_id=user.id, message=message, type_of_message="Admin Message", sender="Admin")
+    for u in users:
+        new_message = Inbox(user_id=u.id, message=message, type_of_message="Admin Message", sender="Admin")
         db.session.add(new_message)
 
     db.session.commit()
@@ -732,69 +686,6 @@ def send_message_to_all_users():
 def logout_admin():
     session.pop('is_admin', None)
     return redirect(url_for('home'))
-
-
-@app.route('/coach', methods=['GET', 'POST'])
-def coach():
-    if not session.get("logged_in"):
-        return redirect(url_for("login"))
-
-    username = session.get("username")
-    user = User.query.filter_by(username=username).first()
-
-    if not user:
-        return redirect(url_for("home"))
-
-    name = user.username
-    age = user.age
-    weight = user.weight
-    height = user.height
-    goal = "Bulk" if user.goal else "Cut"
-    activity_level = user.activity_level
-    gender = "Male" if user.gender else "Female"
-    num_pushups = user.pushups
-    num_pullups = user.pullups
-
-
-    if request.method == 'POST':
-        prompt = request.form['prompt']
-        response = generate_response(prompt, name, age, weight, height, gender, goal, activity_level, num_pushups, num_pullups)
-        return render_template('coach.html', response=response, prompt=prompt)
-
-    return render_template('coach.html')
-
-def generate_response(prompt, name, age, weight, height, gender, goal, activity_level, num_pushups, num_pullups, model="gpt-3.5-turbo", temperature=1, max_tokens=300):
-    personality_description = f"""
-    You are an AI fitness coach named Max designed to help people with various fitness questions and goals.
-    Use this info about the current user to generate responses that are tailored to their needs.
-    Name: {name}
-    Age: {age}
-    Weight: {weight}kg
-    Height: {height}cm
-    Gender: {gender}
-    Fitness Goal: {goal}
-    Activity Level: {activity_level}
-    Pushup count: {num_pushups}
-    Pullup count: {num_pullups}
-    This info does not need to be used in every response, but it should be used to generate responses that are relevant to the information.
-    If age is empty always reply with telling the user to go to the settings page to fill in more info.
-    Please keep your responses brief and to the point.
-    """
-    
-    messages = [
-        {"role": "system", "content": personality_description},
-        {"role": "user", "content": prompt}
-    ]
-    response = openai.ChatCompletion.create(
-        model=model,
-        messages=messages,
-        temperature=temperature,
-        max_tokens=max_tokens,
-        top_p=1.0,
-        frequency_penalty=0.0,
-        presence_penalty=0.0
-    )
-    return response['choices'][0]['message']['content'].strip()
 
 
 def time_since(dt, default="just now"):
@@ -841,97 +732,6 @@ def inbox():
     db.session.commit()
 
     return render_template('inbox.html', messages=messages)
-
-
-@app.route('/data')
-def data():
-    if not session.get("logged_in"):
-        return redirect(url_for("login"))
-
-    username = session.get("username")
-    user = User.query.filter_by(username=username).first()
-
-    if not user:
-        return redirect(url_for("home"))
-
-    calorie_data = Calories.query.filter_by(user_id=user.id).order_by(Calories.day).all()
-    calories = [{'day': c.day.strftime('%Y-%m-%d'), 'calories': c.calories} for c in calorie_data]
-
-    return render_template('data.html', calories=calories)
-
-
-@app.route('/calorie', methods=['GET', 'POST'])
-def calorie():
-    if not session.get("logged_in"):
-        return redirect(url_for("login"))
-
-    username = session.get("username")
-    user = User.query.filter_by(username=username).first()
-
-    if not user:
-        return redirect(url_for("home"))
-    
-    if user.age == 0 or user.height == 0 or user.weight == 0:
-        return redirect(url_for("settings"))
-
-    if request.method == 'POST':
-        calories_consumed = request.form.get('calories')
-        description = request.form.get('description')
-        if calories_consumed:
-            new_calorie_entry = Calories(
-                user_id=user.id, 
-                calories=int(calories_consumed), 
-                description=description, 
-                day=date.today()
-            )
-            db.session.add(new_calorie_entry)
-            db.session.commit()
-            return redirect(url_for('calorie'))
-
-    user_calories = Calories.query.filter_by(user_id=user.id, day=date.today()).all()
-    total_calories = sum([c.calories for c in user_calories])
-
-    daily_calorie_needs = calculate_calories(
-        user.age, user.height, user.weight, user.gender, user.activity_level, user.goal
-    )
-
-    calories_left = daily_calorie_needs - total_calories
-
-    if calories_left <= 0:
-        calories_left = "Goal Achieved"
-
-    return render_template('calorie.html', 
-                           user=user, 
-                           total_calories=round(total_calories, 2), 
-                           daily_calorie_needs=round(daily_calorie_needs, 2), 
-                           calories_left=calories_left,
-                           user_calories=user_calories)
-
-
-
-def calculate_calories(age, height, weight, gender, activity_level, goal):
-    def bmr(weight, height, age, gender):
-        if gender:
-            return 88.362 + (13.397 * weight) + (4.799 * height) - (5.677 * age)
-        else:
-            return 447.593 + (9.247 * weight) + (3.098 * height) - (4.330 * age)
-
-    activity_multipliers = {
-        'sedentary': 1.2,
-        'lightly_active': 1.375,
-        'moderately_active': 1.55,
-        'very_active': 1.725,
-        'extra_active': 1.9
-    }
-
-    if activity_level not in activity_multipliers:
-        raise ValueError("Invalid activity level")
-
-    tdee = bmr(weight, height, age, gender) * activity_multipliers[activity_level]
-    if goal:
-        return round(tdee + 500)
-    else:
-        return round(tdee - 500)
 
 
 @app.route('/privacy-policy')
@@ -1032,6 +832,7 @@ def api_pushups():
         data = request.get_json()
         change = data.get("change")
 
+        old_count = user.pushups
         if change == "increase":
             user.pushups += 1
         elif change == "decrease" and user.pushups > 0:
@@ -1040,6 +841,11 @@ def api_pushups():
             user.pushups += 10
         elif change == "decrease10" and user.pushups > 9:
             user.pushups -= 10
+
+        new_count = user.pushups
+        if old_count != new_count:
+            log_entry = ExerciseLog(user_id=user.id, exercise_name="pushups", change=change, old_count=old_count, new_count=new_count)
+            db.session.add(log_entry)
 
         user.update_points()
         db.session.commit()
@@ -1059,6 +865,7 @@ def api_pullups():
         data = request.get_json()
         change = data.get("change")
 
+        old_count = user.pullups
         if change == "increase":
             user.pullups += 1
         elif change == "decrease" and user.pullups > 0:
@@ -1067,6 +874,11 @@ def api_pullups():
             user.pullups += 10
         elif change == "decrease10" and user.pullups > 9:
             user.pullups -= 10
+
+        new_count = user.pullups
+        if old_count != new_count:
+            log_entry = ExerciseLog(user_id=user.id, exercise_name="pullups", change=change, old_count=old_count, new_count=new_count)
+            db.session.add(log_entry)
 
         user.update_points()
         db.session.commit()
@@ -1112,6 +924,7 @@ def api_exercises():
         if not exercise or exercise.user_id != user.id:
             return jsonify({'error': 'Exercise not found or access denied'}), 404
 
+        old_count = exercise.count
         if change == "increase":
             exercise.count += 1
         elif change == "decrease" and exercise.count > 0:
@@ -1121,7 +934,13 @@ def api_exercises():
         elif change == "decrease10" and exercise.count > 9:
             exercise.count -= 10
 
+        new_count = exercise.count
         user.update_points()
+
+        if old_count != new_count:
+            log_entry = ExerciseLog(user_id=user.id, exercise_name=exercise.name, change=change, old_count=old_count, new_count=new_count)
+            db.session.add(log_entry)
+
         db.session.commit()
 
         return jsonify({'status': 'success', 'message': 'Exercise updated successfully', 'count': exercise.count})
@@ -1144,7 +963,7 @@ def api_exercises():
 
         return jsonify({'status': 'success', 'message': 'Exercise deleted successfully'})
 
-    else:  # GET method
+    else:
         user_exercises = Exercise.query.filter_by(user_id=user.id).all()
         exercises = [{'id': e.id, 'name': e.name, 'count': e.count} for e in user_exercises]
 
@@ -1155,9 +974,10 @@ def api_exercises():
 def api_leaderboards():
     users = User.query.order_by(User.points.desc(), User.username).all()
     user_data = [{'username': (user.username if not user.anonymous_mode else "Anonymous"),
-                  'pullups': user.pullups, 'pushups': user.pushups, 'points': user.points} for user in users]
+    'pullups': user.pullups, 'pushups': user.pushups, 'points': user.points} for user in users]
 
     return jsonify(user_data)
+
 
 @app.route('/api/delete_account', methods=['POST'])
 def api_delete_account():
@@ -1175,6 +995,21 @@ def api_delete_account():
         return jsonify({'status': 'success', 'message': 'Account deleted successfully'})
 
     return jsonify({'error': 'User not found'}), 404
+
+
+@app.route('/exercise_logs')
+def exercise_logs():
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    username = session.get("username")
+    user = User.query.filter_by(username=username).first()
+    if not user:
+        return redirect(url_for("login"))
+
+    logs = ExerciseLog.query.filter_by(user_id=user.id).order_by(ExerciseLog.timestamp.desc()).all()
+
+    return render_template('exercise_logs.html', logs=logs)
 
 
 if __name__ == "__main__":

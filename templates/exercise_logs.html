@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <title>Exercise Logs</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 30px;
+        }
+        h1 {
+            text-align: center;
+        }
+        #chart-container {
+            width: 80%;
+            margin: 0 auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>Your Exercise Logs</h1>
+    <p><a href="{{ url_for('home') }}">Back to Home</a></p>
+
+    {% if logs|length == 0 %}
+        <p>No exercise logs found. Make sure you've updated your pushups or pullups at least once!</p>
+    {% else %}
+        <div id="chart-container">
+            <canvas id="exerciseChart"></canvas>
+        </div>
+        <script>
+ var testData = [{
+    x: new Date(),
+    y: 10
+},{
+    x: new Date(Date.now() - 24*60*60*1000),
+    y: 5
+}];
+
+datasets.push({
+    label: 'Test Exercise',
+    data: testData,
+    borderColor: 'rgba(75, 192, 192, 0.7)',
+    backgroundColor: 'rgba(75, 192, 192, 0.7)',
+    borderWidth: 2,
+    fill: false,
+    tension: 0.1
+});
+
+        </script>
+    {% endif %}
+
+</body>
+</html>
