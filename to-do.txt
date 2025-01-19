@@ -1,0 +1,10 @@
+Fix the slide over menu so it interacts as you would expect (clicking off of it makes it slide back away)
+Make the slide over menu different on mobile so the mobile version is easier to use
+Revamp the profile page to display more interesting facts + just more info
+Add some extra functionality to the inbox (sending messages to users from the search page and then message)
+Completely revamp and complete the data page to show graphs over time
+
+Add extra functionality to IOS app
+Clean up some features in the IOS app
+
+Put all API stuff in its own file/folder

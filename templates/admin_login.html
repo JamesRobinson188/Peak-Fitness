@@ -1,0 +1,68 @@
+<head>
+    <title>Admin Login</title>
+    <meta name="viewport" content="width=device-width">
+    <style>
+        .login-container {
+            text-align: center;
+            margin: 0 auto;
+            max-width: 400px;
+            color: #333;
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        @media screen and (min-width: 768px) {
+            .login-container {
+                margin-top: 50px;
+            }
+        }
+
+        @media screen and (max-width: 767px) {
+            .login-container {
+                margin-top: 20px;
+                padding: 20px;
+            }
+
+            h2 {
+                font-size: 2rem;
+            }
+
+            label {
+                font-size: 1.5rem;
+                display: block;
+                margin-bottom: .5rem;
+            }
+
+            input[type="password"] {
+                font-size: 1.5rem;
+                padding: 15px;
+                width: 100%;
+                box-sizing: border-box;
+                margin-bottom: 1rem;
+                border: 1px solid #ccc;
+            }
+
+            input[type="submit"] {
+                font-size: 1.5rem;
+                padding: 15px 25px;
+                width: 100%;
+                box-sizing: border-box;
+                cursor: pointer;
+                border: none;
+                background-color: #007bff;
+                color: white;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <h2>Admin Login</h2>
+        <form action="{{ url_for('admin_login') }}" method="post">
+            <div class="form-group">
+                <label for="admin_password">Password:</label>
+                <input type="password" id="admin_password" name="admin_password" required>
+            </div>
+            <input type="submit" value="Login">
+        </form>
+    </div>
+</body>

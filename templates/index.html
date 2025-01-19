@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block content %}
+<head>
+    <link rel="stylesheet" href="static/styles.css">
+</head>
+<body>
+    <h2>Leaderboard</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th><a href="/pullups">Pull-ups</a></th>
+                <th><a href="/pushups">Pushups</a></th>
+                <th>Points</th>
+            </tr>
+        </thead>
+        <tbody id="leaderboard-table">
+        </tbody>
+    </table>
+    <a href="/patch" class="patch">Version 3.1</a>
+</body>
+<script>
+    function updateLeaderboard() {
+        fetch('/api/leaderboard')
+            .then(response => response.json())
+            .then(data => {
+                let rowsHTML = '';
+                data.forEach(user => {
+                    let starsHTML = '';
+                    for(let i = 0; i < user.awards; i++) {
+                        starsHTML += '⭐';
+                    }
+
+                    rowsHTML += `<tr>
+                                    <td>${user.username} ${starsHTML}</td>
+                                    <td>${user.pullups}</td>
+                                    <td>${user.pushups}</td>
+                                    <td>${user.points}</td> <!-- Add Points data here -->
+                                </tr>`;
+                });
+                document.getElementById('leaderboard-table').innerHTML = rowsHTML;
+            })
+            .catch(error => console.error('Error:', error));
+    }
+
+    setInterval(updateLeaderboard, 1000);
+</script>
+
+{% endblock %}

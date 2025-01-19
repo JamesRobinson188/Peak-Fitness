@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block content %}
+<head>
+    <title>{{ exercise.name }} Tracker</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='log.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='nav.css') }}">
+    <script>
+        function updateCount(change) {
+            var xhr = new XMLHttpRequest();
+            xhr.open("POST", "/update_exercise/{{ exercise.id }}", true);
+            xhr.setRequestHeader("Content-Type", "application/json");
+            xhr.onreadystatechange = function() {
+                if (xhr.readyState == 4 && xhr.status == 200) {
+                    var response = JSON.parse(this.responseText);
+                    document.getElementById("exerciseCount").innerHTML = response.count;
+                }
+            };
+            xhr.send(JSON.stringify({change: change}));
+        }
+    </script>
+</head>
+<body>
+    <h1>Hi, {{ exercise.user.username }}! You've done <span id="exerciseCount">{{ exercise.count }}</span> {{ exercise.name }}!</h1>
+    <div class="button-container">
+        <button class="plus" type="button" onclick="updateCount('increase')">+1</button>
+        <button class="minus" type="button" onclick="updateCount('decrease')">-1</button>
+        <button class="plus-ten" type="button" onclick="updateCount('increase10')">+10</button>
+        <button class="minus-ten" type="button" onclick="updateCount('decrease10')">-10</button>
+    </div>
+</body>
+{% endblock %}

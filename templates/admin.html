@@ -1,0 +1,115 @@
+<head>
+    <title>Admin Dashboard</title>
+    <meta name="viewport" content="width=device-width, user-scalable=no">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        table {
+            width: 90%;
+            margin: 20px auto;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 10px;
+            border: 1px solid #ddd;
+            text-align: left;
+        }
+        th {
+            background-color: #f0f0f0;
+        }
+        .form-container {
+            padding: 10px;
+            background-color: white;
+            border: 1px solid #ddd;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        input[type="text"],
+        input[type="password"],
+        input[type="number"] {
+            width: 95%;
+            padding: 5px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+        }
+        input[type="submit"] {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            cursor: pointer;
+        }
+        input[type="submit"]:hover {
+            background-color: #45a049;
+        }
+        .action-buttons {
+            text-align: right;
+        }
+    </style>
+</head>
+<body>
+    <h1>Admin Dashboard</h1>
+    <a href="{{ url_for('logout_admin') }}">Logout</a>
+    <h2>Send Message to All Users</h2>
+    <form action="{{ url_for('send_message_to_all_users') }}" method="post">
+        <textarea name="message" rows="4" cols="50" required></textarea><br>
+        <input type="submit" value="Send Message">
+    </form>
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Username</th>
+                <th>Details</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for user in users %}
+                <tr>
+                    <td>{{ user.id }}</td>
+                    <td>{{ user.username }}</td>
+                    <td>
+                        <div class="form-container">
+                            <form action="{{ url_for('edit_user', user_id=user.id) }}" method="post">
+                                <label for="username-{{ user.id }}">Username:</label>
+                                <input type="text" id="username-{{ user.id }}" name="username" value="{{ user.username }}">
+
+                                <label for="password-{{ user.id }}">Password (leave blank to keep the same):</label>
+                                <input type="password" id="password-{{ user.id }}" name="password">
+
+                                <label for="points-{{ user.id }}">Points:</label>
+                                <input type="number" id="points-{{ user.id }}" name="points" value="{{ user.points }}">
+
+                                <label for="pushups-{{ user.id }}">Push-ups:</label>
+                                <input type="number" id="pushups-{{ user.id }}" name="pushups" value="{{ user.pushups }}">
+
+                                <label for="pullups-{{ user.id }}">Pull-ups:</label>
+                                <input type="number" id="pullups-{{ user.id }}" name="pullups" value="{{ user.pullups }}">
+
+                                <div class="action-buttons">
+                                    <input type="submit" value="Update User">
+                                </div>
+                            </form>
+                        </div>
+                    </td>
+                    <td>
+                        <form action="{{ url_for('delete_user', user_id=user.id) }}" method="post" onsubmit="return confirm('Are you sure you want to delete this user?');">
+                            <input type="submit" value="Delete" style="background-color: #f44336;">
+                        </form>
+                    </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</body>

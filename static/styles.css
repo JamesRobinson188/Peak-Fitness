@@ -1,0 +1,61 @@
+body {
+    background-color: #4A5D67;
+    /* background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25' viewBox='0 0 1600 800'%3E%3Cg stroke='%23000' stroke-width='66.7' stroke-opacity='0.05' %3E%3Ccircle fill='%234A5D67' cx='0' cy='0' r='1800'/%3E%3Ccircle fill='%23445864' cx='0' cy='0' r='1700'/%3E%3Ccircle fill='%233f5361' cx='0' cy='0' r='1600'/%3E%3Ccircle fill='%233a4e5e' cx='0' cy='0' r='1500'/%3E%3Ccircle fill='%2336495b' cx='0' cy='0' r='1400'/%3E%3Ccircle fill='%23324458' cx='0' cy='0' r='1300'/%3E%3Ccircle fill='%232e3f55' cx='0' cy='0' r='1200'/%3E%3Ccircle fill='%232c3a52' cx='0' cy='0' r='1100'/%3E%3Ccircle fill='%2329354e' cx='0' cy='0' r='1000'/%3E%3Ccircle fill='%2327304a' cx='0' cy='0' r='900'/%3E%3Ccircle fill='%23262b46' cx='0' cy='0' r='800'/%3E%3Ccircle fill='%23242542' cx='0' cy='0' r='700'/%3E%3Ccircle fill='%2324203e' cx='0' cy='0' r='600'/%3E%3Ccircle fill='%23231b39' cx='0' cy='0' r='500'/%3E%3Ccircle fill='%23221534' cx='0' cy='0' r='400'/%3E%3Ccircle fill='%2321102f' cx='0' cy='0' r='300'/%3E%3Ccircle fill='%2321092a' cx='0' cy='0' r='200'/%3E%3Ccircle fill='%23210024' cx='0' cy='0' r='100'/%3E%3C/g%3E%3C/svg%3E"); */
+    background-image: url("christmas/desktop.png");
+    background-attachment: fixed;
+    background-size: cover;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    background-color: rgba(51, 51, 51, 0.7);
+    border-radius: 10px;
+    overflow: hidden;
+    animation: slideInFromLeft 1s ease forwards;
+}
+
+th, td {
+    padding: 10px;
+    border-bottom: 1px solid rgba(85, 85, 85);
+    color: #ddd;
+    text-align: center;
+}
+
+th {
+    background-color: #007bff;
+}
+
+tr:nth-child(even) {
+    background-color: rgb(85, 85, 85, 0.7);
+}
+
+h2 {
+    font-size: 40;
+    color: #ffffff;
+}
+
+.patch {
+    text-decoration: none;
+    color: white;
+    position: fixed;
+    bottom: 0;
+    right: 0;
+    padding: 10px;
+}
+
+table thead th a {
+    text-decoration: none;
+    color: inherit;
+}
+
+@keyframes slideInFromLeft {
+    0% {
+        transform: translateX(-100%);
+        opacity: 0;
+    }
+    100% {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}

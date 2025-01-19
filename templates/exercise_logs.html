@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Exercise Logs & Summary</title>
+
+  <!-- Bootstrap 5 (CDN) for basic styling -->
+  <link
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+    rel="stylesheet"
+  />
+
+  <!-- Chart.js (v3 or v4) -->
+  <script
+    src="https://cdn.jsdelivr.net/npm/chart.js@4.2.1/dist/chart.umd.min.js"
+  ></script>
+  <!-- Chart.js date adapter (using date-fns) so we can do type: 'time' -->
+  <script
+    src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"
+  ></script>
+
+  <style>
+    body {
+      background-color: #f8f9fa;
+    }
+    h1, h2 {
+      text-align: center;
+      margin-top: 1.5rem;
+    }
+    .chart-container {
+      position: relative;
+      height: 400px; /* Adjust chart height as needed */
+      margin-bottom: 2rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container my-5">
+    <h1>Exercise Logs & Summary</h1>
+
+    <!-- 
+      We'll inject our data from Python (logs) into JS using the tojson filter.
+      "logs" is an array of objects, each like:
+      {
+        "id": 1,
+        "exercise_name": "pushups",
+        "change": "increase",
+        "old_count": 10,
+        "new_count": 11,
+        "timestamp": "2025-01-19T12:34:56"
+      }
+    -->
+    <script>
+      const logs = {{ logs|tojson }};
+    </script>
+
+    <!-- 1) Multi-line Chart: all exercises on one chart by timestamp -->
+    <h2 class="mt-5">All Exercises Over Time</h2>
+    <div class="chart-container">
+      <canvas id="lineChart"></canvas>
+    </div>
+
+    <!-- 2) Bar Chart: Summarize the maximum "new_count" (or total) per exercise -->
+    <h2 class="mt-5">Max Count per Exercise</h2>
+    <div class="chart-container">
+      <canvas id="barChart"></canvas>
+    </div>
+  </div>
+
+  <script>
+    /********************************
+     *  Step 1: Group logs by exercise
+     ********************************/
+    const groupedLogs = {};
+    logs.forEach(log => {
+      const exName = log.exercise_name;
+      if(!groupedLogs[exName]) {
+        groupedLogs[exName] = [];
+      }
+      groupedLogs[exName].push(log);
+    });
+
+    // For a multi-line chart, we want each exercise to be its own dataset
+    // We'll transform each group into { x: date, y: new_count } points, sorted by time
+    const multiLineDatasets = [];
+
+    // For the bar chart, let's track the maximum new_count for each exercise
+    const barLabels = [];
+    const barData = [];
+
+    for(const exName in groupedLogs) {
+      const logsArray = groupedLogs[exName];
+
+      // Sort by ascending time (if not already sorted)
+      logsArray.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+      // Build the line dataset
+      const dataPoints = logsArray.map(entry => ({
+        x: entry.timestamp,    // an ISO date string
+        y: entry.new_count
+      }));
+
+      multiLineDatasets.push({
+        label: exName,
+        data: dataPoints,
+        fill: false
+      });
+
+      // For the bar chart: let’s just take the max "new_count" from all logs for this exercise
+      const maxCount = Math.max(...logsArray.map(l => l.new_count));
+      barLabels.push(exName);
+      barData.push(maxCount);
+    }
+
+    /****************************************
+     *  Step 2: Create the Multi-Line Chart
+     ****************************************/
+    const lineCtx = document.getElementById('lineChart').getContext('2d');
+    const lineChart = new Chart(lineCtx, {
+      type: 'line',
+      data: {
+        datasets: multiLineDatasets
+      },
+      options: {
+        responsive: true,
+        interaction: {
+          mode: 'index',
+          intersect: false,
+        },
+        scales: {
+          x: {
+            type: 'time',              // Time-based axis
+            title: { display: true, text: 'Timestamp' },
+            time: {
+              // The adapter is "chartjs-adapter-date-fns" (loaded above).
+              // Show dates in a user-friendly format (e.g., 'MMM d, HH:mm')
+              displayFormats: {
+                millisecond: 'MMM d, yyyy HH:mm',
+                second: 'MMM d, yyyy HH:mm',
+                minute: 'MMM d, yyyy HH:mm',
+                hour: 'MMM d, yyyy HH:mm',
+                day: 'MMM d, yyyy',
+                week: 'MMM d, yyyy',
+                month: 'MMM yyyy',
+                quarter: 'MMM yyyy',
+                year: 'yyyy'
+              }
+            }
+          },
+          y: {
+            beginAtZero: true,
+            title: { display: true, text: 'Count' }
+          }
+        },
+        plugins: {
+          legend: { display: true }
+        }
+      }
+    });
+
+    /*******************************************
+     *  Step 3: Create the Bar Chart (summary)
+     *******************************************/
+    const barCtx = document.getElementById('barChart').getContext('2d');
+    const barChart = new Chart(barCtx, {
+      type: 'bar',
+      data: {
+        labels: barLabels,
+        datasets: [{
+          label: 'Maximum Count',
+          data: barData,
+          backgroundColor: 'rgba(54, 162, 235, 0.6)'
+        }]
+      },
+      options: {
+        responsive: true,
+        scales: {
+          x: {
+            title: { display: true, text: 'Exercise' }
+          },
+          y: {
+            beginAtZero: true,
+            title: { display: true, text: 'Max New Count' }
+          }
+        },
+        plugins: {
+          legend: { display: true }
+        }
+      }
+    });
+  </script>
+
+  <!-- Optional Bootstrap 5 JavaScript -->
+  <script
+    src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"
+  ></script>
+</body>
+</html>

@@ -1,0 +1,218 @@
+* {
+  overflow: auto;
+}
+
+h1 {
+  font-size: 40px;
+  margin-bottom: 40px;
+  color: #000000;
+  animation: fadeIn 1s ease-in-out;
+}
+
+h2 {
+  color: #000000;
+}
+
+#response {
+  color: rgb(189, 110, 0);
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.container {
+  margin: auto;
+  width: 70%;
+  margin-bottom: 20px;
+  background-color: #fff;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.3);
+  padding: 20px;
+  border-radius: 8px;
+  animation: slideInFromTop 1s ease forwards;
+}
+
+@media (prefers-color-scheme: dark) {
+  body {
+    background-color: #1a1a1a;
+  }
+
+  h1 {
+    color: #fff;
+  }
+
+  h2 {
+    color: #fff;
+  }
+
+  .container {
+    background-color: #222;
+    color: #fff;
+  }
+
+  #response {
+    color: #ff85de;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-shadow: 
+      0 0 5px rgba(128, 0, 128, 0.5), 
+      0 0 10px rgba(128, 0, 128, 0.5), 
+      0 0 15px rgba(128, 0, 128, 0.5);
+  }
+
+  input[type="text"],
+  input[type="text"], select {
+    background-color: #ccc;
+  }
+
+  .glowy-gradient-style .flex-center {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .glowy-gradient-style .noselect {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .glowy-gradient-style .gradient-button {
+    width: 120px;
+    height: 40px;
+    margin: 20px 30px;
+    cursor: pointer;
+    border: none;
+    border-radius: 20px;
+    background-color: #50d8d7;
+    background-image: linear-gradient(316deg, #50d8d7 0%, #923993 74%);
+    transition: 500ms;
+    box-shadow: 0 0 20px #1b86f9;
+    position: relative;
+  }
+
+  .glowy-gradient-style .gradient-button::after {
+    width: 113px;
+    height: 33px;
+    position: absolute;
+    top: 3.5px;
+    left: 3.5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    content: "Submit";
+    font-size: 18px;
+    color: #eee;
+    border-radius: 20px;
+    background-color: #222;
+    transition: 500ms;
+  }
+
+  .glowy-gradient-style .gradient-button:hover::after {
+    font-size: 20px;
+    background-color: transparent;
+  }
+
+  .glowy-gradient-style .gradient-button:hover {
+    transform: scale(0.9);
+    box-shadow: 0 0 20px #1b86f9;
+    background-color: #923993;
+    background-image: linear-gradient(316deg, #923993 0%, #50d8d7 70%);
+    transition: 500ms;
+  }
+
+  .glowy-gradient-style .gradient-button:focus {
+    outline: none;
+  }
+
+  .glowy-gradient-style .gradient-button:active {
+    transform: scale(0.7);
+    box-shadow: 0 0 70px #1b86f9;
+    transition: 200ms;
+  }
+}
+
+@media (prefers-color-scheme: light) {
+  .glowy-gradient-style .gradient-button {
+    width: 120px;
+    height: 40px;
+    margin: 20px 30px;
+    cursor: pointer;
+    border: none;
+    border-radius: 20px;
+    background-color: #f1a1a1;
+    background-image: linear-gradient(316deg, #f1a1a1 0%, #f1d8a9 74%);
+    transition: 500ms;
+    box-shadow: 0 0 20px #ffd700;
+    position: relative;
+  }
+
+  .glowy-gradient-style .gradient-button::after {
+    width: 113px;
+    height: 33px;
+    position: absolute;
+    top: 3.5px;
+    left: 3.5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    content: "Submit";
+    font-size: 18px;
+    color: #333;
+    border-radius: 20px;
+    background-color: #fff;
+    transition: 500ms;
+  }
+
+  .glowy-gradient-style .gradient-button:hover::after {
+    font-size: 20px;
+    background-color: transparent;
+  }
+
+  .glowy-gradient-style .gradient-button:hover {
+    transform: scale(0.9);
+    box-shadow: 0 0 20px #ffd700;
+    background-color: #f1d8a9;
+    background-image: linear-gradient(316deg, #f1d8a9 0%, #f1a1a1 70%);
+    transition: 500ms;
+  }
+
+  .glowy-gradient-style .gradient-button:focus {
+    outline: none;
+  }
+
+  .glowy-gradient-style .gradient-button:active {
+    transform: scale(0.7);
+    box-shadow: 0 0 70px #ffd700;
+    transition: 200ms;
+  }
+}
+
+input[type="text"], select {
+  width: 100%;
+  max-width: 100%;
+  padding: 15px 15px;
+  font-size: 18px;
+  border: 2px solid #ddd;
+  border-radius: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: border-color 0.3s ease;
+  overflow: hidden;
+  margin: 8px 0;
+  display: inline-block;
+  background-color: #fff;
+}
+
+input[type="text"]:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}

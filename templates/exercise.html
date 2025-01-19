@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block content %}
+<head>
+    <link rel="stylesheet" href="{{ url_for('static', filename='exercise.css') }}">
+    <meta name="viewport" content="width=device-width, initial-scale=0.5, user-scalable=no">
+</head>
+<body>
+    <h1>Your Exercises</h1>
+    <form action="{{ url_for('exercise') }}" method="post">
+        <input type="text" name="exercise_name" placeholder="New Exercise Name" required>
+        <button type="submit">Add Exercise</button>
+    </form>
+    <ul>
+        {% for exercise in exercises %}
+            <li>
+                <a class="name" href="{{ url_for('exercise_tracker', exercise_id=exercise.id) }}">
+                    {{ exercise.name }} ({{ exercise.count }})
+                </a>
+                <form action="{{ url_for('exercise') }}" method="post">
+                    <input type="hidden" name="delete_exercise_id" value="{{ exercise.id }}">
+                    <button class="delete" type="submit">Delete</button>
+                </form>
+            </li>
+        {% endfor %}
+    </ul>
+</body>
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const listItems = document.querySelectorAll('li');
+        listItems.forEach((item, index) => {
+            item.style.animationDelay = `${0.2 * index}s`;
+        });
+    });
+</script>
+{% endblock %}
