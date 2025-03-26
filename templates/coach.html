@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block content %}
+<head>
+    <link rel="stylesheet" href="static/coach.css">
+    <meta name="viewport" content="width=device-width, initial-scale=0.5, user-scalable=no">
+</head>
+<body>
+    <h1>Welcome to your AI Fitness Coach</h1>
+    <div class="container">
+        <form method="POST">
+            <label for="prompt">Ask a question:</label>
+            <input type="text" id="prompt" name="prompt" required>
+            <div class="glowy-gradient-style">
+                <button type="submit" class="name noselect flex-center gradient-button"></button>
+            </div>
+        </form>
+
+        <div class="response-container">
+            {% if response %}
+                <h2>Your Question:</h2>
+                <p>{{ prompt }}</p>
+                <h2>Response:</h2>
+                <p id="response"></p>
+            {% endif %}
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            const responseText = "{{ response }}";
+            const responseElement = document.getElementById('response');
+            let index = 0;
+            const words = responseText.split(' ');
+
+            function typeResponse() {
+                if (index < words.length) {
+                    responseElement.innerHTML += words[index] + ' ';
+                    index++;
+                    setTimeout(typeResponse, 30);
+                }
+            }
+
+            if (responseText) {
+                typeResponse();
+            }
+        });
+    </script>
+</body>
+{% endblock %}

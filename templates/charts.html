@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <!-- Include additional chart-specific styling -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='charts.css') }}">
+
+  <h1>Exercise Progress Charts</h1>
+  <div class="charts-container">
+    {% for exercise, data in exercises.items() %}
+      <section class="exercise-section">
+        <h2>{{ exercise }}</h2>
+        <div class="chart-wrapper">
+          <!-- Daily Chart -->
+          <div class="chart-container">
+            <h3>Daily Progress for {{ current_month }}/{{ current_year }}</h3>
+            <canvas id="dailyChart_{{ loop.index }}" width="400" height="200"></canvas>
+          </div>
+          <!-- Monthly Chart -->
+          <div class="chart-container">
+            <h3>Monthly Progress for {{ current_year }}</h3>
+            <canvas id="monthlyChart_{{ loop.index }}" width="400" height="200"></canvas>
+          </div>
+        </div>
+      </section>
+    {% endfor %}
+  </div>
+
+  <!-- Chart.js Library -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    // Wait until the DOM is fully loaded
+    document.addEventListener("DOMContentLoaded", function() {
+      const isDarkMode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      Chart.defaults.color = isDarkMode ? '#fff' : '#000';
+
+      {% for exercise, data in exercises.items() %}
+        (function() {
+          // Initialize Daily Chart for {{ exercise }}
+          const dailyData = {{ data.daily | tojson }};
+          const dailyLabels = dailyData.map(item => item[0]);
+          const dailyCounts = dailyData.map(item => item[1]);
+          const ctxDaily = document.getElementById('dailyChart_{{ loop.index }}').getContext('2d');
+          new Chart(ctxDaily, {
+            type: 'line',
+            data: {
+              labels: dailyLabels,
+              datasets: [{
+                label: 'Daily {{ exercise }}',
+                data: dailyCounts,
+                borderColor: 'rgba(75, 192, 192, 1)',
+                backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                fill: true,
+                tension: 0.2
+              }]
+            },
+            options: {
+              animation: {
+                duration: 2000,
+                easing: 'easeInOutCubic'
+              },
+              scales: {
+                x: { title: { display: true, text: 'Day of Month' } },
+                y: { title: { display: true, text: 'Count' }, beginAtZero: true }
+              }
+            }
+          });
+
+          // Initialize Monthly Chart for {{ exercise }}
+          const monthlyData = {{ data.monthly | tojson }};
+          const monthlyLabels = monthlyData.map(item => item[0]);
+          const monthlyCounts = monthlyData.map(item => item[1]);
+          const ctxMonthly = document.getElementById('monthlyChart_{{ loop.index }}').getContext('2d');
+          new Chart(ctxMonthly, {
+            type: 'bar',
+            data: {
+              labels: monthlyLabels,
+              datasets: [{
+                label: 'Monthly {{ exercise }}',
+                data: monthlyCounts,
+                backgroundColor: 'rgba(153, 102, 255, 0.2)',
+                borderColor: 'rgba(153, 102, 255, 1)',
+                borderWidth: 1
+              }]
+            },
+            options: {
+              scales: {
+                x: { title: { display: true, text: 'Month' } },
+                y: { title: { display: true, text: 'Count' }, beginAtZero: true }
+              },
+              animation: {
+                duration: 1500,
+                easing: 'easeOutBounce',
+                delay: function(context) {
+                  return context.dataIndex * 100;
+                }
+              }
+            }
+          });
+        })();
+      {% endfor %}
+    });
+  </script>
+{% endblock %}

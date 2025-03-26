@@ -1,15 +1,18 @@
+from collections import defaultdict
+import calendar
+import os
+from datetime import datetime, timedelta
+
 from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify
 from flask_sqlalchemy import SQLAlchemy
-import os
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(app.root_path, 'database/users.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.secret_key = 'gy543gy9gh254uy932gy7543ghu896534jyu86954hgy85473gty754r3ghy785h8uy9y43hu89'
-
 db = SQLAlchemy(app)
+
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -62,10 +65,97 @@ class ExerciseLog(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     exercise_name = db.Column(db.String(100))
-    change = db.Column(db.String(20))     # e.g. "increase", "decrease", "increase10", "decrease10"
+    change = db.Column(db.String(20))
     old_count = db.Column(db.Integer)
     new_count = db.Column(db.Integer)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+
+class MonthlyAggregate(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    exercise_name = db.Column(db.String(100), nullable=False)
+    year = db.Column(db.Integer, nullable=False)
+    month = db.Column(db.Integer, nullable=False)
+    total = db.Column(db.Integer, nullable=False)
+
+
+def archive_monthly_logs(user_id, exercise_name, year, month):
+    start_date = datetime(year, month, 1)
+    end_date = datetime(year + 1, 1, 1) if month == 12 else datetime(year, month + 1, 1)
+    logs = ExerciseLog.query.filter(
+        ExerciseLog.user_id == user_id,
+        ExerciseLog.exercise_name == exercise_name,
+        ExerciseLog.timestamp >= start_date,
+        ExerciseLog.timestamp < end_date
+    ).all()
+    total = 0
+    for log in logs:
+        if log.change in ['increase', 'increase10']:
+            total += (log.new_count - log.old_count)
+    monthly_entry = MonthlyAggregate.query.filter_by(
+        user_id=user_id, exercise_name=exercise_name, year=year, month=month
+    ).first()
+    if not monthly_entry:
+        monthly_entry = MonthlyAggregate(
+            user_id=user_id, exercise_name=exercise_name, year=year, month=month, total=total
+        )
+        db.session.add(monthly_entry)
+    else:
+        monthly_entry.total = total
+    for log in logs:
+        db.session.delete(log)
+    db.session.commit()
+
+
+def get_daily_progress(user_id, exercise_name, year, month):
+    start_date = datetime(year, month, 1)
+    end_date = datetime(year + 1, 1, 1) if month == 12 else datetime(year, month + 1, 1)
+    logs = ExerciseLog.query.filter(
+        ExerciseLog.user_id == user_id,
+        ExerciseLog.exercise_name == exercise_name,
+        ExerciseLog.timestamp >= start_date,
+        ExerciseLog.timestamp < end_date
+    ).all()
+    daily_totals = defaultdict(int)
+    for log in logs:
+        if log.change in ['increase', 'increase10']:
+            daily_totals[log.timestamp.date()] += (log.new_count - log.old_count)
+        elif log.change in ['decrease', 'decrease10']:
+            daily_totals[log.timestamp.date()] -= (log.old_count - log.new_count)
+    num_days = calendar.monthrange(year, month)[1]
+    result = []
+    for day in range(1, num_days + 1):
+        date_obj = datetime(year, month, day).date()
+        result.append((str(day), daily_totals.get(date_obj, 0)))
+    return result
+
+
+def get_monthly_progress(user_id, exercise_name, year):
+    monthly_totals = []
+    for month in range(1, 13):
+        archive = MonthlyAggregate.query.filter_by(
+            user_id=user_id, exercise_name=exercise_name, year=year, month=month
+        ).first()
+        if archive:
+            total = archive.total
+        else:
+            start_date = datetime(year, month, 1)
+            end_date = datetime(year + 1, 1, 1) if month == 12 else datetime(year, month + 1, 1)
+            logs = ExerciseLog.query.filter(
+                ExerciseLog.user_id == user_id,
+                ExerciseLog.exercise_name == exercise_name,
+                ExerciseLog.timestamp >= start_date,
+                ExerciseLog.timestamp < end_date
+            ).all()
+            total = 0
+            for log in logs:
+                if log.change in ['increase', 'increase10']:
+                    total += (log.new_count - log.old_count)
+                elif log.change in ['decrease', 'decrease10']:
+                    total -= (log.old_count - log.new_count)
+        monthly_totals.append((str(month), total))
+    return monthly_totals
 
 
 @app.context_processor
@@ -83,11 +173,9 @@ def inject_user_exercises():
 def home():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
-
     users = User.query.order_by(User.points.desc(), User.username).all()
-    user_data = [{'username': (user.username if not user.anonymous_mode else "Anonymous"),
+    user_data = [{'username': user.username if not user.anonymous_mode else "Anonymous",
                   'pullups': user.pullups, 'pushups': user.pushups} for user in users]
-
     return render_template('index.html', users=user_data)
 
 
@@ -102,16 +190,13 @@ def login():
     if request.method == "POST":
         username = request.form.get("username")
         password = request.form.get("password")
-
         user = User.query.filter_by(username=username).first()
-
         if user and check_password_hash(user.password, password):
             session["logged_in"] = True
             session["username"] = username
             return redirect(url_for("home"))
         else:
             error = "Invalid credentials. Please try again."
-
     return render_template("login.html", error=error)
 
 
@@ -121,9 +206,7 @@ def register():
     if request.method == "POST":
         username = request.form.get("username")
         password = request.form.get("password")
-
         existing_user = User.query.filter_by(username=username).first()
-
         if existing_user:
             error = "User already exists. Please choose a different one."
         else:
@@ -134,7 +217,6 @@ def register():
             session["logged_in"] = True
             session["username"] = username
             return redirect(url_for("home"))
-
     return render_template("register.html", error=error)
 
 
@@ -148,17 +230,13 @@ def logout():
 def pushups():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
-
     username = session.get("username")
     user = User.query.filter_by(username=username).first()
-
     if not user:
         return redirect(url_for("login"))
-
     if request.method == 'POST':
         change = request.form.get("change")
         old_count = user.pushups
-
         if change == "increase":
             user.pushups += 1
         elif change == "decrease" and user.pushups > 0:
@@ -167,17 +245,13 @@ def pushups():
             user.pushups += 10
         elif change == "decrease10" and user.pushups > 9:
             user.pushups -= 10
-
         new_count = user.pushups
-        # Log the change
         if old_count != new_count:
-            log_entry = ExerciseLog(user_id=user.id, exercise_name="pushups", change=change, old_count=old_count, new_count=new_count)
+            log_entry = ExerciseLog(user_id=user.id, exercise_name="pushups",
+                                    change=change, old_count=old_count, new_count=new_count)
             db.session.add(log_entry)
-
         db.session.commit()
-
     count = user.pushups
-
     return render_template('pushups.html', count=count, name=username)
 
 
@@ -185,17 +259,13 @@ def pushups():
 def pullups():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
-
     username = session.get("username")
     user = User.query.filter_by(username=username).first()
-
     if not user:
         return redirect(url_for("login"))
-
     if request.method == 'POST':
         change = request.form.get("change")
         old_count = user.pullups
-
         if change == "increase":
             user.pullups += 1
         elif change == "decrease" and user.pullups > 0:
@@ -204,29 +274,22 @@ def pullups():
             user.pullups += 10
         elif change == "decrease10" and user.pullups > 9:
             user.pullups -= 10
-
         new_count = user.pullups
-        # Log the change
         if old_count != new_count:
-            log_entry = ExerciseLog(user_id=user.id, exercise_name="pullups", change=change, old_count=old_count, new_count=new_count)
+            log_entry = ExerciseLog(user_id=user.id, exercise_name="pullups",
+                                    change=change, old_count=old_count, new_count=new_count)
             db.session.add(log_entry)
-
         db.session.commit()
-
     count = user.pullups
-
     return render_template('pullups.html', count=count, name=username)
 
 
 @app.route('/api/leaderboard')
 def api_leaderboard():
     users = User.query.order_by(User.points.desc(), User.username).all()
-    user_data = [{'username': (user.username if not user.anonymous_mode else "Anonymous"),
-    'pullups': user.pullups,
-    'pushups': user.pushups,
-    'awards': user.awards,
-    'points': user.points}
-    for user in users]
+    user_data = [{'username': user.username if not user.anonymous_mode else "Anonymous",
+                  'pullups': user.pullups, 'pushups': user.pushups,
+                  'awards': user.awards, 'points': user.points} for user in users]
     return jsonify(user_data)
 
 
@@ -242,7 +305,6 @@ def update_pushups():
     change = data.get('change')
     if change not in ['increase', 'decrease', 'increase10', 'decrease10']:
         return jsonify({'error': 'Invalid action'}), 400
-
     old_count = user.pushups
     if change == "increase":
         user.pushups += 1
@@ -252,12 +314,11 @@ def update_pushups():
         user.pushups += 10
     elif change == "decrease10" and user.pushups > 9:
         user.pushups -= 10
-
     new_count = user.pushups
     if old_count != new_count:
-        log_entry = ExerciseLog(user_id=user.id, exercise_name="pushups", change=change, old_count=old_count, new_count=new_count)
+        log_entry = ExerciseLog(user_id=user.id, exercise_name="pushups",
+                                change=change, old_count=old_count, new_count=new_count)
         db.session.add(log_entry)
-
     user.update_points()
     db.session.commit()
     return jsonify({'count': user.pushups})
@@ -275,7 +336,6 @@ def update_pullups():
     change = data.get('change')
     if change not in ['increase', 'decrease', 'increase10', 'decrease10']:
         return jsonify({'error': 'Invalid action'}), 400
-
     old_count = user.pullups
     if change == "increase":
         user.pullups += 1
@@ -285,12 +345,11 @@ def update_pullups():
         user.pullups += 10
     elif change == "decrease10" and user.pullups > 9:
         user.pullups -= 10
-
     new_count = user.pullups
     if old_count != new_count:
-        log_entry = ExerciseLog(user_id=user.id, exercise_name="pullups", change=change, old_count=old_count, new_count=new_count)
+        log_entry = ExerciseLog(user_id=user.id, exercise_name="pullups",
+                                change=change, old_count=old_count, new_count=new_count)
         db.session.add(log_entry)
-
     user.update_points()
     db.session.commit()
     return jsonify({'count': user.pullups})
@@ -300,16 +359,13 @@ def update_pullups():
 def settings():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
-
     username = session.get("username")
     user = User.query.filter_by(username=username).first()
     error = None
-
     if request.method == 'POST':
         new_username = request.form.get("new_username")
         new_password = request.form.get("new_password")
         anonymous_mode = request.form.get("anonymous_mode") == 'on'
-
         if new_username and new_username != username:
             existing_user = User.query.filter_by(username=new_username).first()
             if existing_user:
@@ -317,16 +373,11 @@ def settings():
             else:
                 user.username = new_username
                 session["username"] = new_username
-
         if new_password:
             user.password = generate_password_hash(new_password, method='pbkdf2:sha256')
-
         user.anonymous_mode = anonymous_mode
-
         if not error:
             db.session.commit()
-
-    # Removed references to user.gender, user.activity_level, user.goal as they don't exist
     return render_template('settings.html', user=user, error=error)
 
 
@@ -334,18 +385,14 @@ def settings():
 def achievements():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
-
     username = session.get("username")
     user = User.query.filter_by(username=username).first()
-
     if not user:
         return redirect(url_for("home"))
-
     total_points = user.points
     total_exercises = total_points
     trophy = None
     num_awards = 0
-
     if total_exercises >= 100000:
         trophy = "Diamond"
         num_awards = 5
@@ -361,14 +408,12 @@ def achievements():
     elif total_exercises >= 1000:
         trophy = "Bronze"
         num_awards = 1
-
     if num_awards > user.awards:
         message = f"Congratulations! You have reached {trophy} by earning {total_exercises} points!"
         new_message = Inbox(user_id=user.id, message=message, timestamp=datetime.utcnow())
         db.session.add(new_message)
         user.awards = num_awards
         db.session.commit()
-
     return render_template('achievements.html', username=username, total_exercises=total_exercises, trophy=trophy)
 
 
@@ -376,12 +421,10 @@ def achievements():
 def social():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
-
     if request.method == 'POST':
         search_query = request.form.get("search_query")
         users = User.query.filter(User.username.contains(search_query)).all()
         return render_template('social.html', users=users, search_query=search_query)
-
     return render_template('social.html')
 
 
@@ -389,7 +432,6 @@ def social():
 def search_users():
     if not session.get("logged_in"):
         return jsonify({'error': 'Not logged in'}), 401
-
     search_query = request.json.get('search_query')
     users = User.query.filter(User.username.contains(search_query)).all()
     user_data = [{
@@ -408,10 +450,8 @@ def search_users():
 def exercise():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
-
     username = session.get("username")
     user = User.query.filter_by(username=username).first()
-
     if request.method == 'POST':
         if 'exercise_name' in request.form:
             exercise_name = request.form.get("exercise_name")
@@ -420,7 +460,6 @@ def exercise():
                 db.session.add(new_exercise)
                 user.update_points()
                 db.session.commit()
-
         elif 'delete_exercise_id' in request.form:
             exercise_id = request.form.get("delete_exercise_id")
             exercise_to_delete = Exercise.query.get(exercise_id)
@@ -428,7 +467,6 @@ def exercise():
                 db.session.delete(exercise_to_delete)
                 user.update_points()
                 db.session.commit()
-
     user_exercises = Exercise.query.filter_by(user_id=user.id).all()
     return render_template('exercise.html', exercises=user_exercises, user_exercises=user_exercises)
 
@@ -437,17 +475,13 @@ def exercise():
 def update_exercise(exercise_id):
     if not session.get("logged_in"):
         return jsonify({'error': 'Not logged in'}), 401
-
     exercise = Exercise.query.get(exercise_id)
     if not exercise or exercise.user.username != session.get("username"):
         return jsonify({'error': 'Exercise not found or access denied'}), 404
-
     data = request.get_json()
     change = data.get('change')
-
     if change not in ['increase', 'decrease', 'increase10', 'decrease10']:
         return jsonify({'error': 'Invalid action'}), 400
-
     old_count = exercise.count
     if change == "increase":
         exercise.count += 1
@@ -457,16 +491,13 @@ def update_exercise(exercise_id):
         exercise.count += 10
     elif change == "decrease10" and exercise.count > 9:
         exercise.count -= 10
-
     new_count = exercise.count
     exercise.user.update_points()
-
     if old_count != new_count:
-        log_entry = ExerciseLog(user_id=exercise.user_id, exercise_name=exercise.name, change=change, old_count=old_count, new_count=new_count)
+        log_entry = ExerciseLog(user_id=exercise.user_id, exercise_name=exercise.name,
+                                change=change, old_count=old_count, new_count=new_count)
         db.session.add(log_entry)
-
     db.session.commit()
-
     return jsonify({'count': exercise.count})
 
 
@@ -474,11 +505,9 @@ def update_exercise(exercise_id):
 def delete_exercise(exercise_id):
     if not session.get("logged_in"):
         return redirect(url_for("login"))
-
     exercise = Exercise.query.get(exercise_id)
     if not exercise or exercise.user.username != session.get("username"):
         return redirect(url_for("exercise"))
-
     db.session.delete(exercise)
     db.session.commit()
     return redirect(url_for("exercise"))
@@ -488,7 +517,6 @@ def delete_exercise(exercise_id):
 def exercise_tracker(exercise_id):
     if not session.get("logged_in"):
         return redirect(url_for("login"))
-
     exercise = Exercise.query.get_or_404(exercise_id)
     return render_template('exercise_tracker.html', exercise=exercise)
 
@@ -497,27 +525,22 @@ def exercise_tracker(exercise_id):
 def climb():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
-
     username = session.get("username")
     user = User.query.filter_by(username=username).first()
-
     if request.method == 'POST':
         climb_name = request.form.get("climb_name")
         grade = request.form.get("grade")
         lead_climb = 'extra_points' in request.form
-
         if lead_climb:
             climb_name += " (lead)"
         extra_points_claimed = 'extra_points' in request.form
         points = calculate_points_for_grade(grade)
         if extra_points_claimed:
             points += 20
-
         new_climb = Climb(name=climb_name, grade=grade, points=points, user_id=user.id)
         db.session.add(new_climb)
         user.update_points()
         db.session.commit()
-
     user_climbs = Climb.query.filter_by(user_id=user.id).all()
     return render_template('climb.html', climbs=user_climbs)
 
@@ -529,7 +552,6 @@ def calculate_points_for_grade(grade):
         'V11': 120, 'V12': 130, 'V13': 140, 'V14': 150, 'V15': 160,
         'V16': 170, 'V17': 180
     }
-
     climbing_points = {
         '4+': 10, '5': 20, '5+': 30, '6a': 40, '6a+': 50, '6b': 60,
         '6b+': 70, '6c': 80, '6c+': 90, '7a': 100, '7a+': 110,
@@ -537,24 +559,20 @@ def calculate_points_for_grade(grade):
         '8a+': 170, '8b': 180, '8b+': 190, '8c': 200, '8c+': 210,
         '9a': 220, '9a+': 230, '9b': 240, '9b+': 250, '9c': 260
     }
-
     if grade in bouldering_points:
         return bouldering_points[grade]
     elif grade in climbing_points:
         return climbing_points[grade]
-    else:
-        return 0
+    return 0
 
 
 @app.route('/delete_climb/<int:climb_id>', methods=['POST'])
 def delete_climb(climb_id):
     if not session.get("logged_in"):
         return redirect(url_for("login"))
-
     climb = Climb.query.get(climb_id)
     if not climb or climb.user.username != session.get("username"):
         return redirect(url_for("climb"))
-
     db.session.delete(climb)
     climb.user.update_points()
     db.session.commit()
@@ -565,37 +583,40 @@ def delete_climb(climb_id):
 def profile():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
-
     username = session.get("username")
     user = User.query.filter_by(username=username).first()
-
     if not user:
         return redirect(url_for("home"))
-
-    user_climbs = Climb.query.filter_by(user_id=user.id).all()
-    user_exercises = Exercise.query.filter_by(user_id=user.id).all()
-
-    fun_facts = []
-    height_per_pushup = 0.5
-    total_height = user.pushups * height_per_pushup
-    iss_altitude = 408000
-    times_to_ISS = total_height / iss_altitude
-    fun_facts.append(f"With your {user.pushups} pushups, you've lifted yourself a total of {total_height:.2f} meters high, equivalent to reaching the International Space Station {times_to_ISS:.2f} times!")
-
-    pullup_height = 1
-    total_height = user.pullups * pullup_height
-    everest_height = 8848
-    everest_climbs = total_height / everest_height
-    fun_facts.append(f"You've climbed the equivalent of Mount Everest {everest_climbs:.2f} times with your pull-ups!")
-
-    profile_data = {
-        "user": user,
-        "climbs": user_climbs,
-        "exercises": user_exercises,
-        "fun_facts": fun_facts
-    }
-
-    return render_template('profile.html', **profile_data)
+    total_points = user.points
+    total_climbs = len(user.climbs)
+    hardest_climb = max(user.climbs, key=lambda c: c.points, default=None)
+    total_climb_points = sum(climb.points for climb in user.climbs)
+    milestones = [1000, 5000, 10000, 50000, 100000]
+    next_milestone = next((m for m in milestones if m > total_points), None)
+    previous_milestone = max([m for m in milestones if m <= total_points], default=0)
+    progress = ((total_points - previous_milestone) / (next_milestone - previous_milestone) * 100
+                if next_milestone else 100)
+    best_pushup_streak = max((log.new_count for log in user.exercise_logs if log.exercise_name == 'pushups'), default=0)
+    best_pullup_streak = max((log.new_count for log in user.exercise_logs if log.exercise_name == 'pullups'), default=0)
+    log_dates = sorted(set(log.timestamp.date() for log in user.exercise_logs))
+    max_streak = 0
+    current_streak = 1
+    for i in range(1, len(log_dates)):
+        if log_dates[i] == log_dates[i - 1] + timedelta(days=1):
+            current_streak += 1
+        else:
+            max_streak = max(max_streak, current_streak)
+            current_streak = 1
+    max_streak = max(max_streak, current_streak)
+    fun_facts = [
+        f"Your best push-up streak was {best_pushup_streak} in a day!",
+        f"Your best pull-up streak was {best_pullup_streak} in a day!",
+        f"Your longest workout streak is {max_streak} days! 🔥"
+    ]
+    return render_template('profile.html', user=user, total_points=total_points,
+                           next_milestone=next_milestone, progress=progress,
+                           fun_facts=fun_facts, total_climbs=total_climbs,
+                           hardest_climb=hardest_climb, total_climb_points=total_climb_points)
 
 
 @app.route('/admin_login', methods=['GET', 'POST'])
@@ -607,7 +628,6 @@ def admin_login():
             return redirect(url_for('admin'))
         else:
             flash('Incorrect admin password', 'error')
-
     return render_template('admin_login.html')
 
 
@@ -615,7 +635,6 @@ def admin_login():
 def admin():
     if not session.get("is_admin"):
         return redirect(url_for("admin_login"))
-
     users = User.query.all()
     return render_template('admin.html', users=users)
 
@@ -624,20 +643,16 @@ def admin():
 def edit_user(user_id):
     if not session.get("is_admin"):
         return redirect(url_for("admin_login"))
-
     user = User.query.get_or_404(user_id)
     if request.method == 'POST':
         user.username = request.form.get('username', user.username)
         user.points = int(request.form.get('points', user.points))
         user.pushups = int(request.form.get('pushups', user.pushups))
         user.pullups = int(request.form.get('pullups', user.pullups))
-
         if request.form.get('password'):
             user.password = generate_password_hash(request.form.get('password'), method='pbkdf2:sha256')
-
         db.session.commit()
         return redirect(url_for('admin'))
-
     return render_template('edit_user.html', user=user)
 
 
@@ -645,7 +660,6 @@ def edit_user(user_id):
 def delete_user(user_id):
     if not session.get("is_admin"):
         return redirect(url_for("admin_login"))
-
     user = User.query.get_or_404(user_id)
     db.session.delete(user)
     db.session.commit()
@@ -656,17 +670,14 @@ def delete_user(user_id):
 def delete_account():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
-
     username = session.get("username")
     user = User.query.filter_by(username=username).first()
-
     if user:
         db.session.delete(user)
         db.session.commit()
         session.pop("logged_in", None)
         session.pop("username", None)
         return redirect(url_for("register"))
-    
     return redirect(url_for("settings"))
 
 
@@ -674,15 +685,12 @@ def delete_account():
 def send_message_to_all_users():
     if not session.get("is_admin"):
         return redirect(url_for("admin_login"))
-
     message = request.form.get('message')
     users = User.query.all()
     for u in users:
         new_message = Inbox(user_id=u.id, message=message, type_of_message="Admin Message", sender="Admin")
         db.session.add(new_message)
-
     db.session.commit()
-
     return redirect(url_for('admin'))
 
 
@@ -695,7 +703,6 @@ def logout_admin():
 def time_since(dt, default="just now"):
     now = datetime.utcnow()
     diff = now - dt
-
     periods = (
         (diff.days / 365, "year", "years"),
         (diff.days / 30, "month", "months"),
@@ -705,11 +712,9 @@ def time_since(dt, default="just now"):
         (diff.seconds / 60, "minute", "minutes"),
         (diff.seconds, "second", "seconds"),
     )
-
     for period, singular, plural in periods:
         if int(period) > 0:
             return "%d %s ago" % (period, singular if period == 1 else plural)
-
     return default
 
 
@@ -722,19 +727,14 @@ def time_since_filter(dt):
 def inbox():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
-
     username = session.get("username")
     user = User.query.filter_by(username=username).first()
-
     if not user:
         return redirect(url_for("home"))
-
     messages = Inbox.query.filter_by(user_id=user.id).order_by(Inbox.timestamp.desc()).all()
     for message in messages:
         message.read = True
-
     db.session.commit()
-
     return render_template('inbox.html', messages=messages)
 
 
@@ -748,15 +748,12 @@ def api_login():
     data = request.get_json()
     username = data.get("username")
     password = data.get("password")
-
     user = User.query.filter_by(username=username).first()
-
     if user and check_password_hash(user.password, password):
         session["logged_in"] = True
         session["username"] = username
         return jsonify({'status': 'success', 'message': 'Logged in successfully'})
-    else:
-        return jsonify({'status': 'error', 'message': 'Invalid credentials'}), 401
+    return jsonify({'status': 'error', 'message': 'Invalid credentials'}), 401
 
 
 @app.route('/api/logout', methods=['POST'])
@@ -771,56 +768,45 @@ def api_register():
     data = request.get_json()
     username = data.get("username")
     password = data.get("password")
-
     existing_user = User.query.filter_by(username=username).first()
-
     if existing_user:
         return jsonify({'status': 'error', 'message': 'User already exists'}), 400
-    else:
-        hashed_password = generate_password_hash(password, method='pbkdf2:sha256')
-        new_user = User(username=username, password=hashed_password)
-        db.session.add(new_user)
-        db.session.commit()
-        session["logged_in"] = True
-        session["username"] = username
-        return jsonify({'status': 'success', 'message': 'User registered successfully'})
+    hashed_password = generate_password_hash(password, method='pbkdf2:sha256')
+    new_user = User(username=username, password=hashed_password)
+    db.session.add(new_user)
+    db.session.commit()
+    session["logged_in"] = True
+    session["username"] = username
+    return jsonify({'status': 'success', 'message': 'User registered successfully'})
 
 
 @app.route('/api/settings', methods=['GET', 'POST'])
 def api_settings():
     if not session.get("logged_in"):
         return jsonify({'error': 'Not logged in'}), 401
-
     username = session.get("username")
     user = User.query.filter_by(username=username).first()
-
     if request.method == 'POST':
         data = request.get_json()
         new_username = data.get("new_username")
         new_password = data.get("new_password")
         delete_account = data.get("delete_account")
-
         if new_username and new_username != username:
             existing_user = User.query.filter_by(username=new_username).first()
             if existing_user:
                 return jsonify({'status': 'error', 'message': 'Username already exists'}), 400
-            else:
-                user.username = new_username
-                session["username"] = new_username
-
+            user.username = new_username
+            session["username"] = new_username
         if new_password:
             user.password = generate_password_hash(new_password, method='pbkdf2:sha256')
-
         if delete_account:
             db.session.delete(user)
             db.session.commit()
             session.pop("logged_in", None)
             session.pop("username", None)
             return jsonify({'status': 'success', 'message': 'Account deleted successfully'})
-
         db.session.commit()
         return jsonify({'status': 'success', 'message': 'Settings updated successfully'})
-
     return jsonify({'username': user.username})
 
 
@@ -828,14 +814,11 @@ def api_settings():
 def api_pushups():
     if not session.get("logged_in"):
         return jsonify({'error': 'Not logged in'}), 401
-
     username = session.get("username")
     user = User.query.filter_by(username=username).first()
-
     if request.method == 'POST':
         data = request.get_json()
         change = data.get("change")
-
         old_count = user.pushups
         if change == "increase":
             user.pushups += 1
@@ -845,15 +828,13 @@ def api_pushups():
             user.pushups += 10
         elif change == "decrease10" and user.pushups > 9:
             user.pushups -= 10
-
         new_count = user.pushups
         if old_count != new_count:
-            log_entry = ExerciseLog(user_id=user.id, exercise_name="pushups", change=change, old_count=old_count, new_count=new_count)
+            log_entry = ExerciseLog(user_id=user.id, exercise_name="pushups",
+                                    change=change, old_count=old_count, new_count=new_count)
             db.session.add(log_entry)
-
         user.update_points()
         db.session.commit()
-
     return jsonify({'count': user.pushups})
 
 
@@ -861,14 +842,11 @@ def api_pushups():
 def api_pullups():
     if not session.get("logged_in"):
         return jsonify({'error': 'Not logged in'}), 401
-
     username = session.get("username")
     user = User.query.filter_by(username=username).first()
-
     if request.method == 'POST':
         data = request.get_json()
         change = data.get("change")
-
         old_count = user.pullups
         if change == "increase":
             user.pullups += 1
@@ -878,15 +856,13 @@ def api_pullups():
             user.pullups += 10
         elif change == "decrease10" and user.pullups > 9:
             user.pullups -= 10
-
         new_count = user.pullups
         if old_count != new_count:
-            log_entry = ExerciseLog(user_id=user.id, exercise_name="pullups", change=change, old_count=old_count, new_count=new_count)
+            log_entry = ExerciseLog(user_id=user.id, exercise_name="pullups",
+                                    change=change, old_count=old_count, new_count=new_count)
             db.session.add(log_entry)
-
         user.update_points()
         db.session.commit()
-
     return jsonify({'count': user.pullups})
 
 
@@ -894,40 +870,29 @@ def api_pullups():
 def api_exercises():
     if not session.get("logged_in"):
         return jsonify({'error': 'Not logged in'}), 401
-
     username = session.get("username")
     user = User.query.filter_by(username=username).first()
-
     if not user:
         return jsonify({'error': 'User not found'}), 404
-
     if request.method == 'POST':
         data = request.get_json()
         exercise_name = data.get("exercise_name")
-
         if not exercise_name:
             return jsonify({'error': 'Exercise name is required'}), 400
-
         new_exercise = Exercise(name=exercise_name, user_id=user.id)
         db.session.add(new_exercise)
         user.update_points()
         db.session.commit()
-
         return jsonify({'status': 'success', 'message': 'Exercise added successfully'})
-
     elif request.method == 'PUT':
         data = request.get_json()
         exercise_id = data.get("exercise_id")
         change = data.get("change")
-
         if not exercise_id or change not in ['increase', 'decrease', 'increase10', 'decrease10']:
             return jsonify({'error': 'Invalid request'}), 400
-
         exercise = Exercise.query.get(exercise_id)
-
         if not exercise or exercise.user_id != user.id:
             return jsonify({'error': 'Exercise not found or access denied'}), 404
-
         old_count = exercise.count
         if change == "increase":
             exercise.count += 1
@@ -937,49 +902,38 @@ def api_exercises():
             exercise.count += 10
         elif change == "decrease10" and exercise.count > 9:
             exercise.count -= 10
-
         new_count = exercise.count
         user.update_points()
-
         if old_count != new_count:
-            log_entry = ExerciseLog(user_id=user.id, exercise_name=exercise.name, change=change, old_count=old_count, new_count=new_count)
+            log_entry = ExerciseLog(user_id=user.id, exercise_name=exercise.name,
+                                    change=change, old_count=old_count, new_count=new_count)
             db.session.add(log_entry)
-
         db.session.commit()
-
         return jsonify({'status': 'success', 'message': 'Exercise updated successfully', 'count': exercise.count})
-
     elif request.method == 'DELETE':
         data = request.get_json()
         exercise_id = data.get("exercise_id")
-
         if not exercise_id:
             return jsonify({'error': 'Exercise ID is required'}), 400
-
         exercise = Exercise.query.get(exercise_id)
-
         if not exercise or exercise.user_id != user.id:
             return jsonify({'error': 'Exercise not found or access denied'}), 404
-
         db.session.delete(exercise)
         user.update_points()
         db.session.commit()
-
         return jsonify({'status': 'success', 'message': 'Exercise deleted successfully'})
-
     else:
         user_exercises = Exercise.query.filter_by(user_id=user.id).all()
         exercises = [{'id': e.id, 'name': e.name, 'count': e.count} for e in user_exercises]
-
         return jsonify(exercises)
 
 
 @app.route('/api/leaderboards', methods=['GET'])
 def api_leaderboards():
     users = User.query.order_by(User.points.desc(), User.username).all()
-    user_data = [{'username': (user.username if not user.anonymous_mode else "Anonymous"),
-    'pullups': user.pullups, 'pushups': user.pushups, 'points': user.points} for user in users]
-
+    user_data = [{'username': user.username if not user.anonymous_mode else "Anonymous",
+                  'pullups': user.pullups, 'pushups': user.pushups, 'points': user.points}
+                 for user in users]
     return jsonify(user_data)
 
 
@@ -987,17 +941,14 @@ def api_leaderboards():
 def api_delete_account():
     if not session.get("logged_in"):
         return jsonify({'error': 'Not logged in'}), 401
-
     username = session.get("username")
     user = User.query.filter_by(username=username).first()
-
     if user:
         db.session.delete(user)
         db.session.commit()
         session.pop("logged_in", None)
         session.pop("username", None)
         return jsonify({'status': 'success', 'message': 'Account deleted successfully'})
-
     return jsonify({'error': 'User not found'}), 404
 
 
@@ -1005,15 +956,11 @@ def api_delete_account():
 def exercise_logs():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
-
     username = session.get("username")
     user = User.query.filter_by(username=username).first()
     if not user:
         return redirect(url_for("login"))
-
     logs = ExerciseLog.query.filter_by(user_id=user.id).order_by(ExerciseLog.timestamp.desc()).all()
-
-    # Convert them to JSON-friendly dicts
     logs_data = []
     for log in logs:
         logs_data.append({
@@ -1023,10 +970,51 @@ def exercise_logs():
             'change': log.change,
             'old_count': log.old_count,
             'new_count': log.new_count,
-            'timestamp': log.timestamp.isoformat()  # to avoid the "not JSON serializable" error
+            'timestamp': log.timestamp.isoformat()
         })
-
     return render_template('exercise_logs.html', logs=logs_data)
+
+
+@app.route('/charts')
+def charts():
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+    username = session.get("username")
+    user = User.query.filter_by(username=username).first()
+    if not user:
+        return redirect(url_for("login"))
+    now = datetime.utcnow()
+    current_year = now.year
+    current_month = now.month
+
+    # Start by ensuring default exercises (pushups & pullups) are always included
+    exercises = {}
+    default_exercises = ["pushups", "pullups"]
+    for ex in default_exercises:
+        exercises[ex] = {
+            "daily": get_daily_progress(user.id, ex, current_year, current_month),
+            "monthly": get_monthly_progress(user.id, ex, current_year)
+        }
+
+    # Include custom exercises from the Exercise table
+    custom_exercises = Exercise.query.filter_by(user_id=user.id).all()
+    for custom in custom_exercises:
+        key = custom.name
+        if key not in exercises:  # avoid overriding default exercises if names collide
+            exercises[key] = {
+                "daily": get_daily_progress(user.id, key, current_year, current_month),
+                "monthly": get_monthly_progress(user.id, key, current_year)
+            }
+
+    # Also, include any exercise names that have logs but are not yet in our dictionary.
+    log_exercises = db.session.query(ExerciseLog.exercise_name).filter(ExerciseLog.user_id == user.id).distinct().all()
+    for (ex_name,) in log_exercises:
+        if ex_name not in exercises:
+            exercises[ex_name] = {
+                "daily": get_daily_progress(user.id, ex_name, current_year, current_month),
+                "monthly": get_monthly_progress(user.id, ex_name, current_year)
+            }
+    return render_template("charts.html", exercises=exercises, current_year=current_year, current_month=current_month)
 
 
 if __name__ == "__main__":

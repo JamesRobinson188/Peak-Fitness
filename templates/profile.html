@@ -7,32 +7,31 @@
     <h1>{{ user.username }}'s Profile</h1>
     <div class="container">
         <section class="exercises">
-            <h2>Exercise Stats</h2>
+            <h2>Exercise Stats 💪</h2>
             <p>Pushups: {{ user.pushups }}</p>
             <p>Pullups: {{ user.pullups }}</p>
-            <p>Awards: {{ user.awards }}</p>
-        </section>
+            <p>Points: {{ total_points }}</p>
+            <p>Awards: {% for _ in range(user.awards) %}🏅{% endfor %}</p>
+        </section>        
 
-        <section class="climbs">
-            <h2>Climbing Activities</h2>
-            <ul>
-                {% for climb in climbs %}
-                    <li>{{ climb.name }} - Grade: {{ climb.grade }} - Points: {{ climb.points }}</li>
-                {% endfor %}
-            </ul>
-        </section>
+        <section class="climbing-info">
+            <h2>Climbing Achievements 🧗</h2>
+            <p>Total Climbs: {{ total_climbs }}</p>
+            <p>Hardest Climb: {{ hardest_climb.name }} ({{ hardest_climb.grade }})</p>
+            <p>Total Climbing Points: {{ total_climb_points }} 🏔️</p>
+        </section>        
 
-        <section class="custom-exercises">
-            <h2>Custom Exercises</h2>
-            <ul>
-                {% for exercise in exercises %}
-                    <li>{{ exercise.name }}: {{ exercise.count }}</li>
-                {% endfor %}
-            </ul>
-        </section>
+        <section class="progress">
+            <h2>Achievement Progress 🏆</h2>
+            <p>Next Milestone: {{ next_milestone }} Points</p>
+            <div class="progress-bar-container">
+                <div class="progress-bar" style="width: {{ progress }}%;"></div>
+            </div>
+            <p>{{ progress|round(1) }}% Complete</p>
+        </section>        
 
         <section class="fun-facts">
-            <h2>Fun Facts</h2>
+            <h2>Fun Facts 🌟</h2>
             <ul>
                 {% for fact in fun_facts %}
                     <li>{{ fact }}</li>

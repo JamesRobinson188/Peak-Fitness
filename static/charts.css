@@ -1,0 +1,94 @@
+* {
+    overflow: auto;
+}
+
+.charts-container {
+    display: flex;
+    flex-direction: column;
+    gap: 40px;
+}
+
+.exercise-section {
+    background: #fff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.chart-wrapper {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    justify-content: space-around;
+}
+
+.chart-container {
+    flex: 1;
+    min-width: 300px;
+    background: #fafafa;
+    padding: 15px;
+    border-radius: 8px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.chart-container h3 {
+    text-align: center;
+    margin-bottom: 10px;
+    font-size: 1.2rem;
+    color: #34495e;
+}
+
+@media screen and (max-width: 850px) {
+    .chart-wrapper {
+        flex-direction: column;
+        gap: 20px;
+    }
+    .chart-container {
+        width: 100%;           /* Use width instead of min-width */
+        box-sizing: border-box; /* Include padding in the width calculation */
+    }
+}
+
+@media (prefers-color-scheme: dark) {
+    body {
+        background-color: #1a1a1a;
+        color: #ccc;
+    }
+
+    h1 {
+        color: #fff;
+    }
+
+    input[type="text"] {
+        background-color: #222;
+        color: #fff;
+    }
+
+    input[type="text"]:focus {
+        border-color: #007bff;
+    }
+
+    li {
+        background: #222;
+    }
+
+    button {
+        background-color: #007bff;
+        color: #fff;
+    }
+
+    .exercise-section {
+        background: #2c2c2c;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    }
+
+    .chart-container {
+        background: #333;
+        color: #ccc;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    }
+
+    .chart-container h3 {
+        color: #fff;
+    }
+}
